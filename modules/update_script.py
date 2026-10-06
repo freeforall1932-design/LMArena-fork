@@ -1,170 +1,219 @@
 # update_script.py
+#
+# Applies a downloaded update: copies the new program files over the current
+# installation, intelligently merges config.jsonc (preserving comments and
+# user values), cleans up the temporary download folder and restarts the
+# main program.
+
+import json
 import os
+import re
 import shutil
-import time
 import subprocess
 import sys
-import json
-import re
+import time
+
+# Project root, derived from this file's location (<root>/modules/update_script.py)
+# so the script works no matter which working directory it was launched from.
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def strip_json_comments(text: str) -> str:
+    """
+    Remove `//` line comments and `/* */` block comments from JSONC content.
+    Unlike a naive regex, this scanner tracks whether it is inside a JSON
+    string, so comment-like sequences (e.g. "https://...") inside string
+    values are preserved.
+    """
+    result = []
+    i, n = 0, len(text)
+    in_string = False
+    while i < n:
+        ch = text[i]
+        if in_string:
+            result.append(ch)
+            if ch == '\\' and i + 1 < n:
+                result.append(text[i + 1])
+                i += 2
+                continue
+            if ch == '"':
+                in_string = False
+            i += 1
+        else:
+            if ch == '"':
+                in_string = True
+                result.append(ch)
+                i += 1
+            elif ch == '/' and i + 1 < n and text[i + 1] == '/':
+                while i < n and text[i] != '\n':
+                    i += 1
+            elif ch == '/' and i + 1 < n and text[i + 1] == '*':
+                i += 2
+                while i + 1 < n and not (text[i] == '*' and text[i + 1] == '/'):
+                    i += 1
+                i = min(i + 2, n)
+            else:
+                result.append(ch)
+                i += 1
+    return "".join(result)
+
 
 def load_jsonc_values(path):
-    """从一个 .jsonc 文件中加载数据，忽略注释，只返回键值对。"""
+    """Load data from a .jsonc file, ignoring comments, and return the key/value pairs."""
     try:
         with open(path, 'r', encoding='utf-8') as f:
-            content = f.read()
-        content = re.sub(r'//.*', '', content)
-        content = re.sub(r'/\*.*?\*/', '', content, flags=re.DOTALL)
-        return json.loads(content)
-    except (FileNotFoundError, json.JSONDecodeError, Exception) as e:
-        print(f"加载或解析 {path} 的值时出错: {e}")
+            return json.loads(strip_json_comments(f.read()))
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"Error while loading or parsing values from {path}: {e}")
         return None
 
-def get_all_relative_paths(directory):
-    """获取一个目录下所有文件和空文件夹的相对路径集合。"""
-    paths = set()
-    for root, dirs, files in os.walk(directory):
-        # 添加文件
-        for name in files:
-            path = os.path.join(root, name)
-            paths.add(os.path.relpath(path, directory))
-        # 添加空文件夹
-        for name in dirs:
-            dir_path = os.path.join(root, name)
-            if not os.listdir(dir_path):
-                paths.add(os.path.relpath(dir_path, directory) + os.sep)
-    return paths
+
+def find_source_dir(update_dir: str):
+    """
+    Locate the extracted repository folder inside the update directory.
+    GitHub archives unpack into a single '<repo>-<branch>' folder; detect it
+    dynamically instead of hard-coding the repository name.
+    """
+    if not os.path.isdir(update_dir):
+        return None
+    entries = [
+        os.path.join(update_dir, name)
+        for name in os.listdir(update_dir)
+        if os.path.isdir(os.path.join(update_dir, name))
+    ]
+    if len(entries) == 1:
+        return entries[0]
+    # Fall back to the classic GitHub archive naming convention.
+    for entry in entries:
+        if os.path.basename(entry).endswith('-main'):
+            return entry
+    return entries[0] if entries else None
+
 
 def main():
-    print("--- 更新脚本已启动 ---")
-    
-    # 1. 等待主程序退出
-    print("等待主程序关闭 (3秒)...")
+    print("--- Update script started ---")
+
+    # 1. Wait for the main program to exit.
+    print("Waiting for the main program to shut down (3 seconds)...")
     time.sleep(3)
-    
-    # 2. 定义路径
-    destination_dir = os.getcwd()
-    update_dir = "update_temp"
-    source_dir_inner = os.path.join(update_dir, "LMArenaBridge-main")
+
+    # 2. Define paths.
+    destination_dir = PROJECT_ROOT
+    update_dir = os.path.join(PROJECT_ROOT, "update_temp")
+    source_dir_inner = find_source_dir(update_dir)
     config_filename = 'config.jsonc'
     models_filename = 'models.json'
     model_endpoint_map_filename = 'model_endpoint_map.json'
-    
-    if not os.path.exists(source_dir_inner):
-        print(f"错误：找不到源目录 {source_dir_inner}。更新失败。")
+
+    if not source_dir_inner:
+        print(f"Error: could not find the extracted source directory inside {update_dir}. Update failed.")
         return
-        
-    print(f"源目录: {os.path.abspath(source_dir_inner)}")
-    print(f"目标目录: {os.path.abspath(destination_dir)}")
 
-    # 3. 备份关键文件
-    print("正在备份当前配置和模型文件...")
+    print(f"Source directory:      {os.path.abspath(source_dir_inner)}")
+    print(f"Destination directory: {os.path.abspath(destination_dir)}")
+
+    # 3. Back up the current configuration values.
+    print("Backing up the current configuration values...")
     old_config_path = os.path.join(destination_dir, config_filename)
-    old_models_path = os.path.join(destination_dir, models_filename)
     old_config_values = load_jsonc_values(old_config_path)
-    
-    # 4. 确定要保留的文件和文件夹
-    # 保留 update_temp 自身, .git 目录, 和任何用户可能添加的隐藏文件/文件夹
-    preserved_items = {update_dir, ".git", ".github"}
 
-    # 5. 获取新旧文件列表
-    new_files = get_all_relative_paths(source_dir_inner)
-    # 排除 .git 和 .github 目录，因为它们不应该被部署
-    new_files = {f for f in new_files if not (f.startswith('.git') or f.startswith('.github'))}
+    # 4. Copy the new files (except user-managed configuration files).
+    # Note: file deletion is intentionally disabled to protect user data;
+    # this script only copies files and merges the configuration.
+    print("\n--- File change policy ---")
+    print("[*] File deletion is disabled to protect user data. Only file copying and config merging are performed.")
 
-    current_files = get_all_relative_paths(destination_dir)
-
-    print("\n--- 文件变更分析 ---")
-    print("[*] 文件删除功能已禁用，以保护用户数据。仅执行文件复制和配置更新。")
-
-    # 7. 复制新文件（除配置文件外）
-    print("\n[+] 正在复制新文件...")
+    print("\n[+] Copying new files...")
+    new_config_template_path = os.path.join(source_dir_inner, config_filename)
     try:
-        new_config_template_path = os.path.join(source_dir_inner, config_filename)
-        
         for item in os.listdir(source_dir_inner):
             s = os.path.join(source_dir_inner, item)
             d = os.path.join(destination_dir, item)
-            
-            # 跳过 .git 和 .github 目录
+
+            # Skip VCS metadata directories.
             if item in {".git", ".github"}:
                 continue
-            
+
             if os.path.basename(s) == config_filename:
-                continue # 跳过主配置文件，稍后处理
-            
+                continue  # Skip the main config file; it is merged later.
+
             if os.path.basename(s) == model_endpoint_map_filename:
-                continue # 跳过模型端点映射文件，保留用户本地版本
+                continue  # Skip the model endpoint map; keep the user's local version.
 
             if os.path.basename(s) == models_filename:
-                continue # 跳过 models.json 文件，保留用户本地版本
+                continue  # Skip models.json; keep the user's local version.
 
             if os.path.isdir(s):
                 shutil.copytree(s, d, dirs_exist_ok=True)
             else:
                 shutil.copy2(s, d)
-        print("文件复制成功。")
+        print("Files copied successfully.")
 
-    except Exception as e:
-        print(f"文件复制过程中发生错误: {e}")
+    except OSError as e:
+        print(f"Error while copying files: {e}")
         return
 
-    # 8. 智能合并配置
+    # 5. Intelligently merge the configuration.
     if old_config_values and os.path.exists(new_config_template_path):
-        print("\n[*] 正在智能合并配置（保留注释）...")
+        print("\n[*] Merging configuration intelligently (preserving comments)...")
         try:
             with open(new_config_template_path, 'r', encoding='utf-8') as f:
                 new_config_content = f.read()
 
-            new_version_values = load_jsonc_values(new_config_template_path)
+            new_version_values = load_jsonc_values(new_config_template_path) or {}
             new_version = new_version_values.get("version", "unknown")
             old_config_values["version"] = new_version
 
             for key, value in old_config_values.items():
                 if isinstance(value, str):
-                    replacement_value = f'"{value}"'
+                    # json.dumps escapes quotes/backslashes and adds the surrounding quotes.
+                    replacement_value = json.dumps(value)
                 elif isinstance(value, bool):
                     replacement_value = str(value).lower()
                 else:
                     replacement_value = str(value)
-                
-                pattern = re.compile(f'("{key}"\s*:\s*)(?:".*?"|true|false|[\d\.]+)')
+
+                pattern = re.compile(f'("{key}"\\s*:\\s*)(?:".*?"|true|false|[\\d\\.]+)')
                 if pattern.search(new_config_content):
-                    new_config_content = pattern.sub(f'\\g<1>{replacement_value}', new_config_content)
+                    # Use a lambda so backslashes / group references inside the
+                    # value cannot corrupt the replacement.
+                    new_config_content = pattern.sub(lambda m: m.group(1) + replacement_value, new_config_content)
 
             with open(old_config_path, 'w', encoding='utf-8') as f:
                 f.write(new_config_content)
-            print("配置合并成功。")
+            print("Configuration merged successfully.")
 
-        except Exception as e:
-            print(f"配置合并过程中发生严重错误: {e}")
+        except (OSError, re.error) as e:
+            print(f"Critical error while merging the configuration: {e}")
     else:
-        print("无法进行智能合并，将直接使用新版配置文件。")
+        print("Intelligent merge not possible; using the new config file directly.")
         if os.path.exists(new_config_template_path):
             shutil.copy2(new_config_template_path, old_config_path)
 
-    # 9. 清理临时文件夹
-    print("\n[*] 正在清理临时文件...")
+    # 6. Clean up the temporary folder.
+    print("\n[*] Cleaning up temporary files...")
     try:
-        shutil.rmtree(update_dir)
-        print("清理完毕。")
-    except Exception as e:
-        print(f"清理临时文件时发生错误: {e}")
+        shutil.rmtree(update_dir, ignore_errors=True)
+        print("Cleanup complete.")
+    except OSError as e:
+        print(f"Error while cleaning up temporary files: {e}")
 
-    # 10. 重启主程序
-    print("\n[*] 正在重启主程序...")
+    # 7. Restart the main program.
+    print("\n[*] Restarting the main program...")
+    main_script_path = os.path.join(destination_dir, "api_server.py")
     try:
-        main_script_path = os.path.join(destination_dir, "api_server.py")
         if not os.path.exists(main_script_path):
-             print(f"错误: 找不到主程序脚本 {main_script_path}。")
-             return
-        
-        subprocess.Popen([sys.executable, main_script_path])
-        print("主程序已在后台重新启动。")
-    except Exception as e:
-        print(f"重启主程序失败: {e}")
-        print(f"请手动运行 {main_script_path}")
+            print(f"Error: the main program script {main_script_path} was not found.")
+            return
 
-    print("--- 更新完成 ---")
+        subprocess.Popen([sys.executable, main_script_path], cwd=destination_dir)
+        print("The main program has been restarted in the background.")
+    except OSError as e:
+        print(f"Failed to restart the main program: {e}")
+        print(f"Please run it manually: {main_script_path}")
+
+    print("--- Update complete ---")
+
 
 if __name__ == "__main__":
     main()

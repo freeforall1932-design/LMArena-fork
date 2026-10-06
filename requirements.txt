@@ -1,5 +1,12 @@
-fastapi
-uvicorn[standard]
-requests
-packaging
-aiohttp
+# Core web framework and ASGI server
+fastapi>=0.110
+uvicorn[standard]>=0.29
+
+# HTTP clients:
+# - aiohttp is used by api_server.py for async update checks
+# - requests is used by the id_updater.py / model_updater.py helper scripts
+aiohttp>=3.9
+requests>=2.31
+
+# Version comparison for the auto-update check
+packaging>=24.0
