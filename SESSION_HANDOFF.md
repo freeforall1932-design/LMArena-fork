@@ -7,8 +7,8 @@
 | | |
 |---|---|
 | Repo | `freeforall1932-design/LMArena-fork` (fork of `Shuairen51/LMArena`, upstream author `Lianues`) |
-| Working branch | `chrome-extension` (based on `main` @ `368c292`) |
-| PRs | **#1** — translation/modernization/arena.ai wave: **MERGED** into main on 2026-10-06 (`368c292`) · **#2** — Chrome extension: open (branch `chrome-extension`, commit `7732989`) |
+| Working branch | `main` (both PRs merged; feature branches deleted on the remote) |
+| PRs | **#1** — translation/modernization/arena.ai wave: **MERGED** 2026-10-06 (`368c292`) · **#2** — Chrome extension + browser-feedback fixes (2.8.1): **MERGED** 2026-10-06 (`e1ce9bc`) |
 | Local clone | `~/LMArena-fork` (sandbox workspace; branch checked out, tree clean) |
 | Version | `2.8.1` in `config.jsonc`, userscript `@version`, and extension `manifest.json`/`constants.js` — a consistency test in `tests/extension_units.mjs` enforces this; keep them in sync! |
 | Tests | `python tests/integration_smoke.py` → **35/35 passing** · `node tests/extension_units.mjs` → **10/10 passing** (2026-10-06), incl. live arena.ai catalog fetch |
@@ -56,7 +56,7 @@
 6. Multi-tab WebSocket pooling (server dict of connections + health-aware selection) for real concurrency. The extension's worker-as-hub design is the natural client-side half; the server still supports only one `browser_ws`.
 7. New arenas support (Agent/WebDev/Video) — large effort, different protocols; only after #1–#3.
 8. Nice-to-haves: `/healthz` endpoint; rate limiting; `n>1` fan-out for images (old versions had parallel image tasks — current unified pipeline ignores `n`); real token usage from stream metadata if exposed; config schema validation at startup; Windows `os.execv` restart quirk check (idle-restart path).
-9. PR #1 is merged (main is at version `2.7.0`). After merging PR #2, remote `main` reaches `2.8.0`; existing installs then auto-update cleanly (updater compares `packaging.version`). Optionally delete the stale merged branch `english-translation-and-modernization` on the remote.
+9. ~~Merge PRs~~ **Done**: both PRs merged; remote `main` is at version `2.8.1`, so existing installs auto-update cleanly (updater compares `packaging.version`). Stale feature branches were deleted from the remote after merging.
 10. **If any user reports a CSP violation blocking `ws://127.0.0.1` from page context**: move the WebSocket into the service worker (extension origin is CSP-exempt) with `chrome.alarms` (30 s) revival + a 20 s `chrome.runtime.getPlatformInfo()` keepalive, and relay tasks to content scripts via ports. Not needed as of 2026-10-06 (no CSP error observed).
 11. **Extension follow-ups**: real-browser smoke test (checklist above — sandbox had no Chrome); decide load-unpacked-only vs Chrome Web Store publication (store review may scrutinize third-party-site automation); optional `chrome.notifications` on session death / Cloudflare challenge; Firefox port guards (`world: MAIN` not needed anymore, but `storage.session` landed in FF 127+).
 
