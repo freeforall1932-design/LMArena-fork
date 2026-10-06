@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "LMArena API Bridge",
+  "version": "2.8.1",
+  "description": "Bridges Arena.ai (formerly LMArena) to the local LMArena Bridge server so any OpenAI-compatible app can use Arena models through your logged-in browser session.",
+  "permissions": ["webRequest", "storage", "tabs"],
+  "host_permissions": [
+    "https://arena.ai/*",
+    "https://*.arena.ai/*",
+    "https://lmarena.ai/*",
+    "https://*.lmarena.ai/*",
+    "http://127.0.0.1/*",
+    "http://localhost/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://arena.ai/*",
+        "https://*.arena.ai/*",
+        "https://lmarena.ai/*",
+        "https://*.lmarena.ai/*"
+      ],
+      "js": ["common/constants.js", "content/bridge.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "LMArena API Bridge"
+  }
+}

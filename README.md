@@ -19,7 +19,7 @@ This refactored version aims to provide a more stable experience that is easier 
 *   **🌊 Real-time streaming responses**: Receive text responses from models in real time, just like the native OpenAI API.
 *   **🔄 Automatic program updates**: Checks the GitHub repository at startup and can automatically download and apply updates.
 *   **🆔 One-click session ID updates**: `id_updater.py` needs just one browser click (Retry) to capture and write the session IDs into `config.jsonc`.
-*   **⚙️ Browser automation**: The companion Tampermonkey script (`LMArenaApiBridge.js`) communicates with the backend and performs all necessary operations in the browser.
+*   **⚙️ Browser automation — two flavors**: use either the bundled **Chrome extension** (`chrome-extension/`, Manifest V3, load-unpacked — no extra dependencies, toolbar badge status, cleaner `webRequest`-based ID capture) **or** the classic **Tampermonkey script** (`LMArenaApiBridge.js`, works in Chrome/Firefox/Edge). Both talk the same protocol to the backend.
 *   **🍻 Tavern Mode**: Designed for applications like SillyTavern; intelligently merges `system` prompts for compatibility.
 *   **🤫 Bypass Mode**: Attempts to bypass sensitive-word moderation by injecting an extra empty user message.
 *   **🔐 API key protection**: Optionally require an API key for all chat requests.
@@ -32,8 +32,8 @@ This refactored version aims to provide a more stable experience that is easier 
 | Requirement | Notes |
 |---|---|
 | **Python 3.10+** | The code uses modern `X \| None` type syntax |
-| **A desktop browser** | Chrome, Firefox, or Edge |
-| **[Tampermonkey](https://www.tampermonkey.net/)** | Browser extension that runs the userscript |
+| **A desktop browser** | Chrome/Edge/Brave (extension or userscript) or Firefox (userscript) |
+| **The browser bridge** | Either the bundled **Chrome extension** (recommended, no extra installs) **or** [Tampermonkey](https://www.tampermonkey.net/) — pick **one** |
 | **An Arena.ai account** | You must be logged in on the site in that browser |
 
 ### Step 1 — Get the code and install dependencies
@@ -46,12 +46,23 @@ source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### Step 2 — Install the userscript
+### Step 2 — Install the browser bridge (pick ONE option)
 
-1. Open the Tampermonkey dashboard in your browser.
-2. Click **"Create a new script"** (or *Add a new script*).
-3. Delete the template content, then copy the **entire** contents of [`TampermonkeyScript/LMArenaApiBridge.js`](TampermonkeyScript/LMArenaApiBridge.js) into the editor.
-4. Save (`Ctrl+S`).
+**Option A — Chrome extension (recommended for Chrome/Edge/Brave):**
+
+1. Open `chrome://extensions`.
+2. Enable **Developer mode** (top-right toggle).
+3. Click **Load unpacked** and select the **`chrome-extension/`** folder of this repo.
+4. Pin the 🌉 icon — its badge shows the live status: `–` idle, **`ON`** connected, **`CAP`** capture armed, **`ERR`** connection error. Ports are configurable from the popup.
+5. Details: [`chrome-extension/README.md`](chrome-extension/README.md).
+
+**Option B — Tampermonkey userscript (any browser incl. Firefox):**
+
+1. Install the [Tampermonkey](https://www.tampermonkey.net/) extension.
+2. Open the Tampermonkey dashboard → **"Create a new script"**.
+3. Delete the template, paste the **entire** contents of [`TampermonkeyScript/LMArenaApiBridge.js`](TampermonkeyScript/LMArenaApiBridge.js), and save (`Ctrl+S`).
+
+> ⚠️ Never run both at once — every bridge instance opens its own WebSocket and the server keeps only the last connection, so they would fight each other.
 
 ### Step 3 — Start the local server
 
@@ -70,15 +81,17 @@ Leave this terminal open. The server binds to `127.0.0.1:5102` by default; chang
 
 ### Step 4 — Open Arena and connect the bridge
 
-1. In the **same browser** that has Tampermonkey, go to <https://arena.ai/> (or <https://lmarena.ai/> — it redirects).
+1. In the **same browser** that has the extension (or Tampermonkey), go to <https://arena.ai/> (or <https://lmarena.ai/> — it redirects).
 2. Log in if you aren't already.
 3. Any page on the domain works — chat, leaderboard, etc.
 
-**✔️ Checkpoint** — the page **title starts with ✅** and the browser console (F12) shows:
+**✔️ Checkpoint** — the page **title starts with ✅**, the browser console (F12) shows:
 
 ```
 [API Bridge] ✅ WebSocket connection to the local server established.
 ```
+
+and, if you installed the extension, the toolbar badge reads **ON** (green).
 
 ### Step 5 — Capture a session ID (one-time setup)
 
@@ -93,7 +106,7 @@ The bridge needs one valid `session_id` + `message_id` pair from a real conversa
 4. In the browser, open a conversation where **the last message is an answer from your target model** (in Battle mode, don't peek at model names; the required "search" models must use target **A**).
 5. Click the **Retry** button on that answer's card.
 
-**✔️ Checkpoint** — the page title briefly shows 🎯, then the terminal prints:
+**✔️ Checkpoint** — the page title briefly shows 🎯 (extension badge: **CAP**), then the terminal prints:
 
 ```
 🎉 Successfully captured the IDs from the browser!
@@ -152,7 +165,9 @@ curl http://127.0.0.1:5102/v1/chat/completions \
 
 | Symptom | Cause / Fix |
 |---|---|
-| `503 The Tampermonkey client is not connected` | No browser tab connected. Open arena.ai, check the ✅ title prefix, check the Tampermonkey console for errors. Only the **last** opened tab is active. |
+| `503 The Tampermonkey client is not connected` | No browser tab connected. Open arena.ai, check the ✅ title prefix (extension badge: **ON**), check the browser console for errors. Only the **last** opened tab is active, and never run the extension and the userscript at the same time. |
+| Extension badge stays `–` | The Arena tab was opened before the extension loaded — refresh the tab. `ERR` (red) = server down or wrong port (popup settings). Console shows `WebSocket error` when nothing listens on the port — start `python api_server.py` and wait for `Uvicorn running on http://127.0.0.1:5102`. The bridge alternates `127.0.0.1`/`localhost` between retries to survive IPv6 (`::1`) resolution mismatches. |
+| Console shows `Refused to connect to 'ws://…' … Content Security Policy` | The site's CSP is blocking page-context WebSockets. Report the exact message — the fix is moving the socket into the extension's service worker (tracked in SESSION_HANDOFF.md leftover work). |
 | Title shows 🎯 but capture never completes | You must click **Retry on an assistant message** (not send a new message). Capture mode is one-shot; re-run `id_updater.py` if you missed it. |
 | `400 The resolved session ID or message ID is invalid` | `config.jsonc` still has placeholder IDs — run Step 5. |
 | Response says *Cloudflare human-verification page detected* | Solve the captcha in the browser tab, then retry the request. The server automatically asks the tab to refresh. |
@@ -369,7 +384,7 @@ sequenceDiagram
 ├── .gitignore                  # Git ignore file
 ├── api_server.py               # Core backend service (FastAPI) 🐍
 ├── id_updater.py               # One-click session ID update script 🆔
-├── model_updater.py            # Manual model list update script 📋
+├── model_updater.py            # Model list updater (direct catalog API) 📋
 ├── models.json                 # Core model mapping table (maintained manually) 🗺️
 ├── available_models.json       # Available model reference list (auto-generated) 📄
 ├── model_endpoint_map.json     # [Advanced] Model-to-dedicated-session mapping 🎯
@@ -378,12 +393,20 @@ sequenceDiagram
 ├── PROJECT_SUMMARY.md          # What the project does, its limits & site compatibility 📊
 ├── SESSION_HANDOFF.md          # Session state, done work & leftover tasks 🤝
 ├── config.jsonc                # Global feature configuration file ⚙️
+├── chrome-extension/           # MV3 Chrome extension bridge (load unpacked) 🧩
+│   ├── manifest.json
+│   ├── background.js           # webRequest ID capture, badge, status hub
+│   ├── common/constants.js     # Shared constants (ports, regexes, endpoints)
+│   ├── content/bridge.js       # WebSocket + streaming fetch relay
+│   ├── popup/                  # Toolbar popup (status + port settings)
+│   └── README.md               # Extension-specific docs
 ├── modules/
 │   └── update_script.py        # Auto-update logic script 🔄
 ├── tests/
-│   └── integration_smoke.py    # End-to-end smoke test with a simulated browser 🧪
+│   ├── integration_smoke.py    # End-to-end suite with a simulated browser 🧪
+│   └── extension_units.mjs     # Offline unit tests for the extension (node)
 └── TampermonkeyScript/
-    └── LMArenaApiBridge.js     # Frontend automation Tampermonkey script 🐵
+    └── LMArenaApiBridge.js     # Classic Tampermonkey bridge script 🐵
 ```
 
 **Enjoy exploring the world of models on Arena freely!** 💖
