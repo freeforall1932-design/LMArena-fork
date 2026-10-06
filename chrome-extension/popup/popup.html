@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>LMArena API Bridge</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      width: 300px;
+      margin: 0;
+      padding: 14px;
+      font: 13px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: #ffffff;
+      color: #1f2937;
+    }
+    h1 { font-size: 14px; margin: 0 0 10px; display: flex; align-items: center; gap: 6px; }
+    .row { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: #9ca3af; flex: none; }
+    .dot.connected { background: #22c55e; }
+    .dot.error { background: #ef4444; }
+    .dot.capture { background: #f59e0b; }
+    #statusText { font-weight: 600; }
+    #statusDetail { color: #6b7280; font-size: 12px; min-height: 16px; word-break: break-all; }
+    label { display: block; margin-top: 10px; color: #374151; font-weight: 600; font-size: 12px; }
+    input[type="number"] {
+      width: 100%; box-sizing: border-box; padding: 6px 8px; margin-top: 3px;
+      border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;
+    }
+    button {
+      margin-top: 12px; width: 100%; padding: 7px 0; border: none; border-radius: 6px;
+      background: #2563eb; color: #fff; font-size: 13px; font-weight: 600; cursor: pointer;
+    }
+    button:hover { background: #1d4ed8; }
+    #saved { color: #16a34a; font-size: 12px; text-align: center; min-height: 16px; margin-top: 6px; }
+    .hint { margin-top: 10px; color: #6b7280; font-size: 11.5px; border-top: 1px solid #e5e7eb; padding-top: 8px; }
+    code { background: #f3f4f6; padding: 1px 4px; border-radius: 4px; font-size: 11.5px; }
+    .version { text-align: center; color: #9ca3af; font-size: 11px; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <h1>🌉 LMArena API Bridge</h1>
+
+  <div class="row">
+    <span id="statusDot" class="dot"></span>
+    <span id="statusText">Checking…</span>
+  </div>
+  <div id="statusDetail"></div>
+
+  <label for="serverPort">API server port (api_server.py)</label>
+  <input id="serverPort" type="number" min="1" max="65535" step="1" placeholder="5102" />
+
+  <label for="idUpdaterPort">ID updater port (id_updater.py)</label>
+  <input id="idUpdaterPort" type="number" min="1" max="65535" step="1" placeholder="5103" />
+
+  <button id="saveBtn">Save ports</button>
+  <div id="saved"></div>
+
+  <div class="hint">
+    Start the server with <code>python api_server.py</code>, then open an
+    <b>arena.ai</b> tab. Capture IDs with <code>python id_updater.py</code> and
+    one <b>Retry</b> click. Point your OpenAI app at
+    <code>http://127.0.0.1:<span id="hintPort">5102</span>/v1</code>.
+  </div>
+  <div class="version" id="version"></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LMArena API Bridge
 // @namespace    http://tampermonkey.net/
-// @version      2.7.0
+// @version      2.8.0
 // @description  Bridges Arena.ai (formerly LMArena) to a local API server via WebSocket for streamlined automation.
 // @author       Lianues
 // @match        https://lmarena.ai/*
@@ -329,7 +329,7 @@
 
     // --- Start the connection ---
     console.log("========================================");
-    console.log("  LMArena API Bridge v2.7.0 is running.");
+    console.log("  LMArena API Bridge v2.8.0 is running.");
     console.log("  - Works on arena.ai (and legacy lmarena.ai)");
     console.log("  - Chat features connect to ws://localhost:5102");
     console.log("  - The ID capturer posts to http://localhost:5103");

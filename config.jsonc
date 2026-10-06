@@ -1,7 +1,7 @@
 {
   // Version number
   // Used by the auto-update check; please do not modify it manually.
-  "version": "2.7.0",
+  "version": "2.8.0",
 
   // --- Server settings ---
   // Address the API server binds to.
