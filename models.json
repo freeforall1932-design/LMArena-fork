@@ -1,5 +1,11 @@
 {
-    "gemini-2.5-pro": "e2d9d353-6dbe-4414-bf87-bd289d523726",
-    "gpt-5": "983bc566-b783-4d28-b24c-3c8b08eb1086",
-    "nano-banana": "e4e58f18-c04f-47cd-8d11-4b2ece7b617e:image"
+    "gemini-2.5-pro": "0199f060-b306-7e1f-aeae-0ebb4e3f1122",
+    "gpt-5-high": "983bc566-b783-4d28-b24c-3c8b08eb1086",
+    "gpt-5.5-instant": "019e71ea-1e1d-740f-9c2d-dab5869ff108",
+    "gemini-3.1-pro-preview": "019c7820-5480-78b6-9fef-04c0d7004054",
+    "grok-4.20-beta-0309-reasoning": "019ce35a-fa6f-7262-8ee2-ed4442821ce7",
+    "glm-5": "019c45d7-96f0-7d39-8143-9d57941b5523",
+    "nano-banana": "0199ef2a-583f-7088-b704-b75fd169401d:image",
+    "nano-banana-2-lite": "019fbb94-0662-7830-808f-ee8dfe6098a2:image",
+    "gpt-image-1": "6e855f13-55d7-4127-8656-9168a9f4dcc0:image"
 }
