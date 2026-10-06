@@ -7,7 +7,7 @@
     'use strict';
 
     const LMAB = {
-        VERSION: "2.8.0",
+        VERSION: "2.8.1",
 
         DEFAULT_SERVER_PORT: 5102,        // api_server.py WebSocket + HTTP
         DEFAULT_ID_UPDATER_PORT: 5103,    // id_updater.py one-shot listener
@@ -30,6 +30,19 @@
             "*://lmarena.ai/*",
             "*://*.lmarena.ai/*",
         ],
+
+        // WebSocket host candidates for the local server, alternated across
+        // reconnect attempts: 127.0.0.1 avoids machines where 'localhost'
+        // resolves to IPv6 ::1 while the server listens on IPv4 (and the
+        // reverse case is covered by falling back to 'localhost').
+        WS_HOSTS: ['127.0.0.1', 'localhost'],
+
+        // Build the bridge WebSocket URL for a given reconnect attempt.
+        wsUrl(port, attempt) {
+            const hosts = LMAB.WS_HOSTS;
+            const idx = ((attempt % hosts.length) + hosts.length) % hosts.length; // negative-safe
+            return `ws://${hosts[idx]}:${port}/ws`;
+        },
 
         TITLE_OK_PREFIX: "✅ ",
         TITLE_CAPTURE_PREFIX: "🎯 ",

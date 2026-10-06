@@ -63,7 +63,8 @@ Data path never touches the service worker, so MV3 worker lifetime limits cannot
 | Symptom | Fix |
 |---|---|
 | Badge stays `–` | No Arena tab open, or the tab was opened before the extension was loaded → refresh the tab |
-| Badge `ERR` / red | `api_server.py` not running or wrong port in popup |
+| Badge `ERR` / red, console shows `WebSocket error` | Nothing is listening on the port: start `python api_server.py` (wait for `Uvicorn running on http://127.0.0.1:5102`) or fix the port in the popup. The bridge alternates `127.0.0.1`/`localhost` between retries to survive IPv6 (`::1`) resolution mismatches |
+| Console shows `Refused to connect to 'ws://…' … Content Security Policy` | The site's CSP is blocking page-context WebSockets — report the exact message; the fix is moving the socket into the service worker (tracked in SESSION_HANDOFF.md) |
 | Badge `ON` but requests 503 | Another tab/bridge (userscript?) replaced this connection — keep one Arena tab, disable the Tampermonkey version |
 | `CAP` never resolves after Retry click | `id_updater.py` not running (its listener must be up first), or wrong ID-updater port in the popup |
 | Response mentions reCAPTCHA | Arena is challenging automated retries — interact with the page manually once, then retry |

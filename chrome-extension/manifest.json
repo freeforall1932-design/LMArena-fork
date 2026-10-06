@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "LMArena API Bridge",
-  "version": "2.8.0",
+  "version": "2.8.1",
   "description": "Bridges Arena.ai (formerly LMArena) to the local LMArena Bridge server so any OpenAI-compatible app can use Arena models through your logged-in browser session.",
   "permissions": ["webRequest", "storage", "tabs"],
   "host_permissions": [

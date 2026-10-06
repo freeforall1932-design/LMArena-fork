@@ -62,6 +62,14 @@ check('paths: primary is /nextjs-api/, fallback is /api/', () => {
     assert.equal(LMAB.STREAM_PATH_BUILDERS.length, 2);
 });
 
+// --- WebSocket URL builder (IPv6/localhost hardening) ---
+check('wsUrl: alternates 127.0.0.1/localhost across reconnect attempts', () => {
+    assert.equal(LMAB.wsUrl(5102, 0), 'ws://127.0.0.1:5102/ws');
+    assert.equal(LMAB.wsUrl(5102, 1), 'ws://localhost:5102/ws');
+    assert.equal(LMAB.wsUrl(5102, 2), 'ws://127.0.0.1:5102/ws');
+    assert.equal(LMAB.wsUrl(6000, -1), 'ws://localhost:6000/ws'); // negative-safe
+});
+
 // --- Manifest validity ---
 const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'chrome-extension', 'manifest.json'), 'utf-8'));
 

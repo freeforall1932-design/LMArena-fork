@@ -42,7 +42,7 @@ Two sidecar scripts: `id_updater.py` (one-click capture of a session/message ID 
 | **Hot reload** of `config.jsonc` / `models.json` / `model_endpoint_map.json` — no restart | ✅ tested |
 | One-command model list refresh, direct from `arena.ai/nextjs-api/model-catalog` (251 unique models, 6 arenas, incl. per-model `arenas` tags) | ✅ tested live |
 | One-click session-ID capture (`id_updater.py` + Retry-button interception) | ✅ flow tested |
-| **Chrome extension (MV3, load-unpacked)** as a Tampermonkey alternative: badge status, popup port config, `webRequest`-based ID capture (no page patching), isolated-world execution | ✅ unit-tested; protocol identical to the userscript (browser smoke pending — no Chrome in CI sandbox) |
+| **Chrome extension (MV3, load-unpacked)** as a Tampermonkey alternative: badge status, popup port config, `webRequest`-based ID capture (no page patching), isolated-world execution | ✅ unit-tested; protocol identical to the userscript. First real-browser pass (2026-10-06, v2.8.1): injection + popup + reconnect logic confirmed on arena.ai; end-to-end chat still pending a logged-in capture |
 | Auto program update from this GitHub repo (version compare → zip → merge config → restart) | ✅ logic tested |
 | Idle auto-restart, Cloudflare-challenge detection + auto page refresh, friendly errors for 413/captcha | ✅ |
 | Works on **arena.ai** *and* legacy **lmarena.ai** (userscript matches both; new `/nextjs-api/stream/...` path with `/api/stream/...` fallback) | ✅ code-level; see caveats below |

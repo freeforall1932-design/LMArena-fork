@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LMArena API Bridge
 // @namespace    http://tampermonkey.net/
-// @version      2.8.0
+// @version      2.8.1
 // @description  Bridges Arena.ai (formerly LMArena) to a local API server via WebSocket for streamlined automation.
 // @author       Lianues
 // @match        https://lmarena.ai/*
@@ -17,8 +17,13 @@
     'use strict';
 
     // --- Configuration ---
-    const SERVER_URL = "ws://localhost:5102/ws"; // Must match the port in api_server.py / config.jsonc
+    const SERVER_PORT = 5102; // Must match server_port in config.jsonc
     const ID_UPDATER_URL = "http://127.0.0.1:5103/update"; // One-shot listener run by id_updater.py
+    // WebSocket host candidates, alternated across reconnect attempts:
+    // 127.0.0.1 avoids machines where 'localhost' resolves to IPv6 ::1 while
+    // the server listens on IPv4 (and vice versa via the fallback).
+    const WS_HOSTS = ["127.0.0.1", "localhost"];
+    let wsAttempt = 0;
     // Arena.ai (post-rebrand) serves the streaming API under /nextjs-api/...
     // The legacy /api/... prefix is tried as a fallback for older deployments.
     const STREAM_PATH_BUILDERS = [
@@ -51,11 +56,13 @@
             return;
         }
 
-        console.log(`[API Bridge] Connecting to the local server: ${SERVER_URL}...`);
-        socket = new WebSocket(SERVER_URL);
+        const url = `ws://${WS_HOSTS[wsAttempt++ % WS_HOSTS.length]}:${SERVER_PORT}/ws`;
+        console.log(`[API Bridge] Connecting to the local server: ${url}...`);
+        socket = new WebSocket(url);
 
         socket.onopen = () => {
             console.log("[API Bridge] ✅ WebSocket connection to the local server established.");
+            wsAttempt = 0;
             addTitlePrefix(TITLE_OK_PREFIX);
         };
 
@@ -314,7 +321,7 @@
     async function sendPageSource() {
         try {
             const htmlContent = document.documentElement.outerHTML;
-            await originalFetch('http://localhost:5102/internal/update_available_models', {
+            await originalFetch('http://127.0.0.1:5102/internal/update_available_models', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'text/html; charset=utf-8'
@@ -329,9 +336,9 @@
 
     // --- Start the connection ---
     console.log("========================================");
-    console.log("  LMArena API Bridge v2.8.0 is running.");
+    console.log("  LMArena API Bridge v2.8.1 is running.");
     console.log("  - Works on arena.ai (and legacy lmarena.ai)");
-    console.log("  - Chat features connect to ws://localhost:5102");
+    console.log("  - Chat features connect to ws://127.0.0.1:5102 (falls back to localhost)");
     console.log("  - The ID capturer posts to http://localhost:5103");
     console.log("========================================");
 

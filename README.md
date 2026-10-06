@@ -166,7 +166,8 @@ curl http://127.0.0.1:5102/v1/chat/completions \
 | Symptom | Cause / Fix |
 |---|---|
 | `503 The Tampermonkey client is not connected` | No browser tab connected. Open arena.ai, check the ✅ title prefix (extension badge: **ON**), check the browser console for errors. Only the **last** opened tab is active, and never run the extension and the userscript at the same time. |
-| Extension badge stays `–` | The Arena tab was opened before the extension loaded — refresh the tab. `ERR` (red) = server down or wrong port (popup settings). |
+| Extension badge stays `–` | The Arena tab was opened before the extension loaded — refresh the tab. `ERR` (red) = server down or wrong port (popup settings). Console shows `WebSocket error` when nothing listens on the port — start `python api_server.py` and wait for `Uvicorn running on http://127.0.0.1:5102`. The bridge alternates `127.0.0.1`/`localhost` between retries to survive IPv6 (`::1`) resolution mismatches. |
+| Console shows `Refused to connect to 'ws://…' … Content Security Policy` | The site's CSP is blocking page-context WebSockets. Report the exact message — the fix is moving the socket into the extension's service worker (tracked in SESSION_HANDOFF.md leftover work). |
 | Title shows 🎯 but capture never completes | You must click **Retry on an assistant message** (not send a new message). Capture mode is one-shot; re-run `id_updater.py` if you missed it. |
 | `400 The resolved session ID or message ID is invalid` | `config.jsonc` still has placeholder IDs — run Step 5. |
 | Response says *Cloudflare human-verification page detected* | Solve the captcha in the browser tab, then retry the request. The server automatically asks the tab to refresh. |

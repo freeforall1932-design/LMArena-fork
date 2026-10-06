@@ -20,8 +20,11 @@ async function refreshStatus() {
             dot.classList.add('capture');
             $('statusText').textContent = 'ID-capture armed 🎯 — click Retry on an assistant message';
         } else {
-            dot.classList.add(st.bridgeStatus === 'connected' ? 'connected' : (st.bridgeStatus === 'error' ? 'error' : ''));
-            $('statusText').textContent = STATUS_LABELS[st.bridgeStatus] || st.bridgeStatus;
+            // classList.add('') throws ("token must not be empty") — only add real classes.
+            const cls = st.bridgeStatus === 'connected' ? 'connected'
+                : st.bridgeStatus === 'error' ? 'error' : '';
+            if (cls) dot.classList.add(cls);
+            $('statusText').textContent = STATUS_LABELS[st.bridgeStatus] || st.bridgeStatus || 'Not connected';
         }
 
         const details = [];

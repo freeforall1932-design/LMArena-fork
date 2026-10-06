@@ -20,6 +20,8 @@
     let socket = null;
     let reconnectTimer = null;
     let serverPort = LMAB.DEFAULT_SERVER_PORT;
+    let wsAttempt = 0;      // alternates 127.0.0.1 / localhost across retries
+    let lastWsError = '';   // surfaced in the popup as the disconnect reason
 
     // --- Title indicators (parity with the userscript UX) --------------------
 
@@ -57,12 +59,14 @@
         if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
             return;
         }
-        const url = `ws://localhost:${serverPort}/ws`;
+        const url = LMAB.wsUrl(serverPort, wsAttempt++);
         console.log(`[API Bridge] Connecting to the local server: ${url}...`);
         socket = new WebSocket(url);
 
         socket.onopen = () => {
             console.log('[API Bridge] ✅ WebSocket connection to the local server established.');
+            wsAttempt = 0;
+            lastWsError = '';
             addTitlePrefix(LMAB.TITLE_OK_PREFIX);
             reportStatus('connected');
         };
@@ -104,7 +108,7 @@
         socket.onclose = () => {
             console.warn('[API Bridge] 🔌 Connection to the local server closed. Retrying in 5 seconds...');
             removeTitlePrefix(LMAB.TITLE_OK_PREFIX);
-            reportStatus('disconnected');
+            reportStatus('disconnected', lastWsError);
             if (reconnectTimer === null) {
                 reconnectTimer = setTimeout(() => {
                     reconnectTimer = null;
@@ -113,9 +117,10 @@
             }
         };
 
-        socket.onerror = (error) => {
-            console.error('[API Bridge] ❌ WebSocket error:', error);
-            reportStatus('error', 'WebSocket error; is api_server.py running?');
+        socket.onerror = () => {
+            lastWsError = `Could not reach the local server on port ${serverPort} — is api_server.py running?`;
+            console.error(`[API Bridge] ❌ WebSocket error: ${lastWsError}`);
+            reportStatus('error', lastWsError);
             socket.close(); // triggers the reconnect logic in onclose
         };
     }
@@ -254,7 +259,7 @@
     async function sendPageSource() {
         try {
             const htmlContent = document.documentElement.outerHTML;
-            await fetch(`http://localhost:${serverPort}/internal/update_available_models`, {
+            await fetch(`http://127.0.0.1:${serverPort}/internal/update_available_models`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'text/html; charset=utf-8' },
                 body: htmlContent,
