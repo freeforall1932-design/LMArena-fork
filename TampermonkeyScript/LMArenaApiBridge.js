@@ -1,12 +1,14 @@
 // ==UserScript==
 // @name         LMArena API Bridge
 // @namespace    http://tampermonkey.net/
-// @version      2.6.2
-// @description  Bridges LMArena to a local API server via WebSocket for streamlined automation.
+// @version      2.7.0
+// @description  Bridges Arena.ai (formerly LMArena) to a local API server via WebSocket for streamlined automation.
 // @author       Lianues
 // @match        https://lmarena.ai/*
 // @match        https://*.lmarena.ai/*
-// @icon         https://www.google.com/s2/favicons?sz=64&domain=lmarena.ai
+// @match        https://arena.ai/*
+// @match        https://*.arena.ai/*
+// @icon         https://www.google.com/s2/favicons?sz=64&domain=arena.ai
 // @grant        none
 // @run-at       document-end
 // ==/UserScript==
@@ -17,6 +19,12 @@
     // --- Configuration ---
     const SERVER_URL = "ws://localhost:5102/ws"; // Must match the port in api_server.py / config.jsonc
     const ID_UPDATER_URL = "http://127.0.0.1:5103/update"; // One-shot listener run by id_updater.py
+    // Arena.ai (post-rebrand) serves the streaming API under /nextjs-api/...
+    // The legacy /api/... prefix is tried as a fallback for older deployments.
+    const STREAM_PATH_BUILDERS = [
+        (sessionId, messageId) => `/nextjs-api/stream/retry-evaluation-session-message/${sessionId}/messages/${messageId}`,
+        (sessionId, messageId) => `/api/stream/retry-evaluation-session-message/${sessionId}/messages/${messageId}`,
+    ];
     let socket;
     let reconnectTimer = null;
     let isCaptureModeActive = false; // Toggle for ID-capture mode
@@ -119,10 +127,10 @@
         }
 
         // The URL is the same for both chat and text-to-image requests.
-        const apiUrl = `/api/stream/retry-evaluation-session-message/${session_id}/messages/${message_id}`;
+        // Try the current /nextjs-api/ path first, then the legacy /api/ one.
         const httpMethod = 'PUT';
 
-        console.log(`[API Bridge] Using API endpoint: ${apiUrl}`);
+        console.log("[API Bridge] Preparing request for session:", session_id);
 
         const newMessages = [];
         let lastMsgIdInChain = null;
@@ -173,18 +181,36 @@
         try {
             // Use the original (unwrapped) fetch so the bridge's own requests
             // never pass through the capture interceptor below.
-            const response = await originalFetch(apiUrl, {
-                method: httpMethod,
-                headers: {
-                    'Content-Type': 'text/plain;charset=UTF-8', // LMArena uses text/plain
-                    'Accept': '*/*',
-                },
-                body: JSON.stringify(body),
-                credentials: 'include' // Cookies are required.
-            });
+            let response = null;
+            let apiUrl = null;
+            for (let p = 0; p < STREAM_PATH_BUILDERS.length; p++) {
+                apiUrl = STREAM_PATH_BUILDERS[p](session_id, message_id);
+                console.log(`[API Bridge] Using API endpoint: ${apiUrl}`);
+                response = await originalFetch(apiUrl, {
+                    method: httpMethod,
+                    headers: {
+                        'Content-Type': 'text/plain;charset=UTF-8', // Arena uses text/plain
+                        'Accept': '*/*',
+                    },
+                    body: JSON.stringify(body),
+                    credentials: 'include' // Cookies are required.
+                });
+                // A 404 means this path no longer exists; try the next candidate.
+                if (response.status !== 404 || p === STREAM_PATH_BUILDERS.length - 1) {
+                    break;
+                }
+                console.warn(`[API Bridge] Endpoint ${apiUrl} returned 404; trying the fallback path...`);
+            }
 
             if (!response.ok || !response.body) {
                 const errorBody = await response.text();
+                if (/recaptcha/i.test(errorBody)) {
+                    throw new Error(
+                        "Arena.ai rejected the request because a reCAPTCHA token is required for this retry call. " +
+                        "Interact with the Arena page in your browser (complete any visible captcha), then retry. " +
+                        `Raw response: ${errorBody.slice(0, 200)}`
+                    );
+                }
                 throw new Error(`Abnormal network response. Status: ${response.status}. Body: ${errorBody}`);
             }
 
@@ -247,8 +273,9 @@
         }
 
         // Only attempt matching when the URL is a valid string.
+        // Matches both the current /nextjs-api/stream/... and the legacy /api/stream/... paths.
         if (urlString) {
-            const match = urlString.match(/\/api\/stream\/retry-evaluation-session-message\/([a-f0-9-]+)\/messages\/([a-f0-9-]+)/);
+            const match = urlString.match(/\/(?:nextjs-)?api\/stream\/retry-evaluation-session-message\/([a-f0-9-]+)\/messages\/([a-f0-9-]+)/);
 
             // Only capture IDs for requests that were NOT issued by the bridge
             // itself (the bridge uses originalFetch and never reaches this
@@ -302,7 +329,8 @@
 
     // --- Start the connection ---
     console.log("========================================");
-    console.log("  LMArena API Bridge v2.6.2 is running.");
+    console.log("  LMArena API Bridge v2.7.0 is running.");
+    console.log("  - Works on arena.ai (and legacy lmarena.ai)");
     console.log("  - Chat features connect to ws://localhost:5102");
     console.log("  - The ID capturer posts to http://localhost:5103");
     console.log("========================================");

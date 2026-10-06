@@ -167,6 +167,33 @@ def load_model_map():
         MODEL_NAME_TO_ID_MAP = {}
 
 
+# --- Hot reloading of dynamic files ---
+# Tracks last-seen modification times so config.jsonc, models.json and
+# model_endpoint_map.json are re-read only when they actually change on disk.
+# A single os.path.getmtime() per file per request is negligible overhead.
+_dynamic_file_mtimes: dict[str, float | None] = {}
+
+
+def refresh_dynamic_files():
+    """Reload dynamic files (config + model maps) only when they changed on disk."""
+    for path, loader in (
+        ('config.jsonc', load_config),
+        ('models.json', load_model_map),
+        ('model_endpoint_map.json', load_model_endpoint_map),
+    ):
+        try:
+            mtime = os.path.getmtime(path)
+        except OSError:
+            mtime = None
+        if path not in _dynamic_file_mtimes:
+            _dynamic_file_mtimes[path] = mtime
+            loader()  # Initial load at startup.
+        elif _dynamic_file_mtimes[path] != mtime:
+            _dynamic_file_mtimes[path] = mtime
+            logger.info(f"'{path}' changed on disk; hot-reloading...")
+            loader()
+
+
 # --- Update check ---
 # Auto-update source repository. This points at the fork so that updating does
 # not silently replace the translated/modernized files with upstream ones.
@@ -395,7 +422,7 @@ async def lifespan(app: FastAPI):
     """Lifespan function that runs while the server starts up and shuts down."""
     global idle_monitor_thread, last_activity_time, main_event_loop
     main_event_loop = asyncio.get_running_loop()  # Grab the main event loop.
-    load_config()  # Load configuration first.
+    refresh_dynamic_files()  # Load config + model maps (and start tracking file mtimes).
 
     # --- Print the current operating mode ---
     mode = CONFIG.get("id_updater_last_mode", "direct_chat")
@@ -408,8 +435,6 @@ async def lifespan(app: FastAPI):
     logger.info("=" * 60)
 
     await check_for_updates()  # Check for program updates (non-blocking).
-    load_model_map()  # Load the model mappings.
-    load_model_endpoint_map()  # Load the model endpoint mappings.
     logger.info("Server startup complete. Waiting for the Tampermonkey script to connect...")
 
     # Mark the starting point for activity tracking.
@@ -920,7 +945,8 @@ async def websocket_endpoint(websocket: WebSocket):
 # --- OpenAI-compatible API endpoints ---
 @app.get("/v1/models")
 async def get_models():
-    """Serve an OpenAI-compatible model list."""
+    """Serve an OpenAI-compatible model list (hot-reloaded from models.json)."""
+    refresh_dynamic_files()
     if not MODEL_NAME_TO_ID_MAP:
         return JSONResponse(
             status_code=404,
@@ -1005,6 +1031,9 @@ async def chat_completions(request: Request):
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON request body.")
 
+    # Hot-reload config + model maps if any of the files changed on disk.
+    refresh_dynamic_files()
+
     model_name = openai_req.get("model")
     logger.info(f"API request received for model '{model_name}'.")
     model_info = MODEL_NAME_TO_ID_MAP.get(model_name, {})  # Empty dict for unknown models instead of None.
@@ -1016,9 +1045,6 @@ async def chat_completions(request: Request):
         # Image models no longer need a separate handler: _process_lmarena_stream
         # already understands image payloads, so image generation natively
         # supports both streaming and non-streaming responses.
-
-    # Reload the latest configuration so session IDs etc. are always current.
-    load_config(verbose=False)
 
     # --- API key validation ---
     api_key = CONFIG.get("api_key")

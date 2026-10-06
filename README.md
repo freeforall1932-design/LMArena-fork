@@ -1,41 +1,181 @@
 # 🚀 LMArena Bridge - AI Model Arena API Proxy 🌉
 
-Welcome to the new generation of LMArena Bridge! 🎉 This is a high-performance toolset built on **FastAPI** and **WebSocket** that lets you seamlessly use the vast collection of large language models available on [LMArena.ai](https://lmarena.ai/) through any OpenAI-API-compatible client or application.
+Welcome to the new generation of LMArena Bridge! 🎉 This is a high-performance toolset built on **FastAPI** and **WebSocket** that lets you use the large language models available on [LMArena.ai](https://lmarena.ai/) — now rebranded to **[Arena.ai](https://arena.ai/)** — through any OpenAI-API-compatible client or application.
 
 This refactored version aims to provide a more stable experience that is easier to maintain and extend.
+
+> **⚠️ Compatibility note (October 2026):** lmarena.ai now redirects to **arena.ai**. This build matches both domains and tries the site's current `/nextjs-api/stream/...` endpoint before falling back to the legacy `/api/stream/...` one. Arena.ai has also started requiring reCAPTCHA tokens for some retry calls — see **[PROJECT_SUMMARY.md](PROJECT_SUMMARY.md)** for a full, verified status report of what works and what does not.
 
 ## ✨ Key Features
 
 *   **🚀 High-performance backend**: Built on **FastAPI** and **Uvicorn**, providing an asynchronous, high-performance API service.
 *   **🔌 Stable WebSocket communication**: Uses WebSocket instead of Server-Sent Events (SSE) for more reliable, low-latency two-way communication.
-*   **🤖 OpenAI-compatible interface**: Fully compatible with the OpenAI `v1/chat/completions`, `v1/models` and `v1/images/generations` endpoints.
-*   **📋 Manual model list updates**: The `model_updater.py` script lets you manually trigger extraction of the latest available model list from the LMArena page, saving it to `available_models.json` for easy browsing and for updating the core `models.json`.
+*   **🤖 OpenAI-compatible interface**: Compatible with the OpenAI `v1/chat/completions` and `v1/models` endpoints (image generation is integrated into chat completions).
+*   **📋 One-command model list updates**: `model_updater.py` fetches Arena.ai's public model-catalog API **directly** (no browser or server needed) and saves every model — with its arena categories — to `available_models.json`. A legacy browser-based extraction path remains as a fallback (`--via-browser`).
+*   **🔥 Hot-reloading configuration**: `config.jsonc`, `models.json` and `model_endpoint_map.json` are picked up automatically when they change — **no server restart needed**.
 *   **📎 Universal file upload**: Supports uploading any file type (images, audio, PDF, code, etc.) via Base64, including multiple files at once.
-*   **🎨 Native streaming text-to-image**: Text-to-image is now fully unified with text generation. Simply request an image model through the `/v1/chat/completions` endpoint and receive Markdown-formatted images as a stream, exactly like text.
-*   **🗣️ Full conversation history support**: Automatically injects the conversation history into LMArena for contextual, continuous conversations.
+*   **🎨 Native streaming text-to-image**: Text-to-image is fully unified with text generation. Request an image model through `/v1/chat/completions` and receive Markdown-formatted images as a stream, exactly like text.
+*   **🗣️ Full conversation history support**: Automatically injects the conversation history for contextual, continuous conversations.
 *   **🌊 Real-time streaming responses**: Receive text responses from models in real time, just like the native OpenAI API.
-*   **🔄 Automatic program updates**: Checks the GitHub repository at startup and can automatically download and apply updates when a new version is found.
-*   **🆔 One-click session ID updates**: The `id_updater.py` script requires just one action in your browser to automatically capture and update the session IDs needed in `config.jsonc`.
-*   **⚙️ Browser automation**: The companion Tampermonkey script (`LMArenaApiBridge.js`) communicates with the backend server and performs all necessary operations in the browser.
-*   **🍻 Tavern Mode**: Designed for applications like SillyTavern; intelligently merges `system` prompts to ensure compatibility.
-*   **🤫 Bypass Mode**: Attempts to bypass the platform's sensitive-word moderation by injecting an extra empty user message into requests.
-*   **🔐 API key protection**: Set an API key in the config file to add a layer of security to your service.
-*   **🎯 Advanced model-session mapping**: Configure independent session ID pools per model, and bind each session to a specific working mode (such as `battle` or `direct_chat`) for finer-grained request control.
+*   **🔄 Automatic program updates**: Checks the GitHub repository at startup and can automatically download and apply updates.
+*   **🆔 One-click session ID updates**: `id_updater.py` needs just one browser click (Retry) to capture and write the session IDs into `config.jsonc`.
+*   **⚙️ Browser automation**: The companion Tampermonkey script (`LMArenaApiBridge.js`) communicates with the backend and performs all necessary operations in the browser.
+*   **🍻 Tavern Mode**: Designed for applications like SillyTavern; intelligently merges `system` prompts for compatibility.
+*   **🤫 Bypass Mode**: Attempts to bypass sensitive-word moderation by injecting an extra empty user message.
+*   **🔐 API key protection**: Optionally require an API key for all chat requests.
+*   **🎯 Advanced model-session mapping**: Independent session ID pools per model, each bound to a working mode (`battle` or `direct_chat`).
+
+## 🛠️ Quick Start (Step by Step)
+
+### Prerequisites
+
+| Requirement | Notes |
+|---|---|
+| **Python 3.10+** | The code uses modern `X \| None` type syntax |
+| **A desktop browser** | Chrome, Firefox, or Edge |
+| **[Tampermonkey](https://www.tampermonkey.net/)** | Browser extension that runs the userscript |
+| **An Arena.ai account** | You must be logged in on the site in that browser |
+
+### Step 1 — Get the code and install dependencies
+
+```bash
+git clone https://github.com/freeforall1932-design/LMArena-fork.git
+cd LMArena-fork
+python -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+### Step 2 — Install the userscript
+
+1. Open the Tampermonkey dashboard in your browser.
+2. Click **"Create a new script"** (or *Add a new script*).
+3. Delete the template content, then copy the **entire** contents of [`TampermonkeyScript/LMArenaApiBridge.js`](TampermonkeyScript/LMArenaApiBridge.js) into the editor.
+4. Save (`Ctrl+S`).
+
+### Step 3 — Start the local server
+
+```bash
+python api_server.py
+```
+
+**✔️ Checkpoint** — you should see logs ending with:
+
+```
+Server startup complete. Waiting for the Tampermonkey script to connect...
+INFO:     Uvicorn running on http://127.0.0.1:5102 (Press CTRL+C to quit)
+```
+
+Leave this terminal open. The server binds to `127.0.0.1:5102` by default; change `server_host` / `server_port` in `config.jsonc` if you need LAN/Docker access (and update the ports in the userscript accordingly).
+
+### Step 4 — Open Arena and connect the bridge
+
+1. In the **same browser** that has Tampermonkey, go to <https://arena.ai/> (or <https://lmarena.ai/> — it redirects).
+2. Log in if you aren't already.
+3. Any page on the domain works — chat, leaderboard, etc.
+
+**✔️ Checkpoint** — the page **title starts with ✅** and the browser console (F12) shows:
+
+```
+[API Bridge] ✅ WebSocket connection to the local server established.
+```
+
+### Step 5 — Capture a session ID (one-time setup)
+
+The bridge needs one valid `session_id` + `message_id` pair from a real conversation.
+
+1. Keep the server from Step 3 running.
+2. In a **new terminal**:
+   ```bash
+   python id_updater.py
+   ```
+3. Choose a mode: `a` = **DirectChat** (recommended for first setup) or `b` = **Battle**.
+4. In the browser, open a conversation where **the last message is an answer from your target model** (in Battle mode, don't peek at model names; the required "search" models must use target **A**).
+5. Click the **Retry** button on that answer's card.
+
+**✔️ Checkpoint** — the page title briefly shows 🎯, then the terminal prints:
+
+```
+🎉 Successfully captured the IDs from the browser!
+✅ IDs updated successfully.
+```
+
+The script writes the IDs into `config.jsonc` and exits. Done — this rarely needs repeating (only when the conversation dies or you switch model families).
+
+### Step 6 — (Optional, recommended) Refresh the model list
+
+```bash
+python model_updater.py
+```
+
+This fetches Arena.ai's **public model-catalog API directly** — no browser tab and no running server required.
+
+**✔️ Checkpoint** — the output ends with:
+
+```
+✅ 'available_models.json' updated with 251 unique models.
+```
+
+Open `available_models.json`, pick the models you want (each entry shows which `arenas` it belongs to — text, code, text-to-image, search, text-to-video, document), and copy their `"publicName": "id"` pairs into `models.json` (append `":image"` to the id for text-to-image models). Thanks to hot reloading, the server picks up your edit **without a restart**.
+
+> If the direct fetch is ever blocked, the script automatically falls back to the legacy browser-based flow (requires the server from Step 3 and an open Arena tab); force it with `--via-browser`.
+
+### Step 7 — Point your OpenAI client at the bridge
+
+| Setting | Value |
+|---|---|
+| **API Base URL** | `http://127.0.0.1:5102/v1` |
+| **API Key** | Anything if `api_key` in `config.jsonc` is empty; otherwise the exact key you set |
+| **Model name** | Must **exactly match** a key in `models.json` |
+
+### Step 8 — Test it
+
+```bash
+curl http://127.0.0.1:5102/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gemini-2.5-pro",
+    "messages": [{"role": "user", "content": "Hello!"}],
+    "stream": false
+  }'
+```
+
+**✔️ Checkpoint** — a JSON response with the model's reply, and matching activity in the server terminal.
+
+### Daily use (after first setup)
+
+1. `python api_server.py`
+2. Open any <https://arena.ai/> tab and wait for the ✅ in the title.
+3. Use your OpenAI client as normal — that's it.
+
+## 🔧 Troubleshooting
+
+| Symptom | Cause / Fix |
+|---|---|
+| `503 The Tampermonkey client is not connected` | No browser tab connected. Open arena.ai, check the ✅ title prefix, check the Tampermonkey console for errors. Only the **last** opened tab is active. |
+| Title shows 🎯 but capture never completes | You must click **Retry on an assistant message** (not send a new message). Capture mode is one-shot; re-run `id_updater.py` if you missed it. |
+| `400 The resolved session ID or message ID is invalid` | `config.jsonc` still has placeholder IDs — run Step 5. |
+| Response says *Cloudflare human-verification page detected* | Solve the captcha in the browser tab, then retry the request. The server automatically asks the tab to refresh. |
+| Response says *attachment exceeds the size limit* | Arena limits uploads (~5 MB). Compress the file. |
+| Response mentions *reCAPTCHA* | Arena.ai now gates some retry calls behind reCAPTCHA. Interact with the page manually once (complete any captcha), then retry. See [PROJECT_SUMMARY.md](PROJECT_SUMMARY.md). |
+| `Model 'x' not in models.json` warning | Add the model to `models.json` (see Step 6). Unknown models are sent without a model ID and usually still work in the active session's mode. |
+| Wrong model answers / mode confusion | Check `id_updater_last_mode` and per-model mappings in `model_endpoint_map.json`; battle vs direct-chat sessions are not interchangeable. |
+| Port conflict on 5102/5103 | Change `server_port` in `config.jsonc` **and** the two URLs at the top of the userscript. |
 
 ## ⚙️ Configuration Files
 
-The project's main behavior is controlled through `config.jsonc`, `models.json` and `model_endpoint_map.json`.
+The project's behavior is controlled through `config.jsonc`, `models.json` and `model_endpoint_map.json`. All three are **hot-reloaded** — edit them while the server runs, no restart needed.
 
 ### `models.json` - Core Model Mapping
-This file maps model names on the LMArena platform to their internal IDs, and supports specifying the model type via a special format.
+Maps model names to their internal Arena IDs, with optional type suffixes.
 
-*   **Important**: This is a **required** core file for the program to run. You need to maintain this list manually.
+*   **Important**: This is a **required** core file. Maintain it manually (with help from `available_models.json`).
 *   **Format**:
     *   **Standard text model**: `"model-name": "model-id"`
     *   **Image generation model**: `"model-name": "model-id:image"`
 *   **Notes**:
-    *   The program identifies image models by checking whether the model ID string contains `:image`.
-    *   This format keeps maximum compatibility with older config files; models without a specified type default to `"text"`.
+    *   Image models are detected by the `:image` suffix on the ID.
+    *   Models without a suffix default to type `"text"` (fully backward-compatible).
 *   **Example**:
     ```json
     {
@@ -45,32 +185,35 @@ This file maps model names on the LMArena platform to their internal IDs, and su
     ```
 
 ### `available_models.json` - Available Model Reference (Optional)
-*   This is a **reference file** generated by the `model_updater.py` script.
-*   It contains complete information (ID, name, organization, etc.) for all models extracted from the LMArena page.
-*   Run `model_updater.py` to generate or refresh this file, then copy the model entries you need into `models.json`.
+*   A **reference file** generated by `model_updater.py`.
+*   Contains complete information (ID, name, organization, capabilities) for every model extracted from the Arena page.
+*   Regenerate it any time, then copy the entries you want into `models.json`.
 
 ### `config.jsonc` - Global Configuration
 
-This is the main configuration file containing the server's global settings.
+*   `server_host` / `server_port`: Bind address of the API server. Defaults to `127.0.0.1:5102` (local only). Use `0.0.0.0` for Docker/LAN access. **If you change the port, update the userscript URLs too.**
+*   `session_id` / `message_id`: Global default session IDs, used when a model has no entry in `model_endpoint_map.json`. Updated automatically by `id_updater.py`.
+*   `id_updater_last_mode` / `id_updater_battle_target`: Global default request mode (`direct_chat` or `battle`, target `A`/`B`).
+*   `use_default_ids_if_mapping_not_found` (default `true`):
+    *   `true`: models without a mapping fall back to the global IDs/mode.
+    *   `false`: unmapped models return an error — use for strict per-model session control.
+*   `enable_auto_update`: Check this GitHub repo for updates at startup.
+*   `bypass_enabled`: Inject an empty user message to try to slip past sensitive-word moderation (text models only).
+*   `tavern_mode_enabled`: Merge all `system` messages into one — for SillyTavern-style clients that send full history.
+*   `stream_response_timeout_seconds`: Max wait per stream chunk (default 360).
+*   `enable_idle_restart` / `idle_restart_timeout_seconds`: Restart the server after prolonged idleness (`-1` disables).
+*   `api_key`: If non-empty, every `/v1/chat/completions` request must send `Authorization: Bearer <key>`.
 
-*   `server_host` / `server_port`: The address and port the API server binds to. Defaults to `127.0.0.1:5102` (local access only). Set `server_host` to `0.0.0.0` to allow access from other devices or Docker. **Note:** if you change `server_port`, also update the port in the Tampermonkey script.
-*   `session_id` / `message_id`: The global default session IDs. These are used when a model has no specific mapping in `model_endpoint_map.json`.
-*   `id_updater_last_mode` / `id_updater_battle_target`: The global default request mode. Likewise, these settings are used when a specific session does not specify a mode.
-*   `use_default_ids_if_mapping_not_found`: A very important switch (defaults to `true`).
-    *   `true`: If the requested model is not found in `model_endpoint_map.json`, use the global default IDs and mode.
-    *   `false`: Return an error when no mapping is found. Useful when you need strict per-model session control.
-*   For other options such as `api_key` and `tavern_mode_enabled`, see the comments inside the file.
+### `model_endpoint_map.json` - Per-Model Configuration (Advanced)
 
-### `model_endpoint_map.json` - Per-Model Configuration
-
-This powerful advanced feature lets you override the global configuration and assign one or more dedicated sessions to specific models.
+Override the global configuration with dedicated sessions for specific models.
 
 **Core advantages**:
-1.  **Session isolation**: Use independent sessions for different models to avoid context cross-talk.
-2.  **Higher concurrency**: Configure an ID pool for popular models; the program randomly picks one ID per request (simulating round-robin), reducing the risk of hammering a single session.
-3.  **Mode binding**: Bind a session ID to the mode it was captured in (`direct_chat` or `battle`), ensuring the request format is always correct.
+1.  **Session isolation**: Independent sessions per model — no context cross-talk.
+2.  **Higher concurrency**: An ID pool per model; one entry is chosen at random per request (pseudo round-robin), reducing the risk of hammering a single session.
+3.  **Mode binding**: Each session remembers the mode it was captured in (`direct_chat` or `battle`), so the request format is always correct.
 
-**Configuration example**:
+**Example**:
 ```json
 {
   "claude-3-opus-20240229": [
@@ -92,85 +235,8 @@ This powerful advanced feature lets you override the global configuration and as
   }
 }
 ```
-*   **Opus**: Configured with an ID pool. One entry is chosen at random per request, and the request strictly follows its bound `mode` and `battle_target`.
-*   **Gemini**: Uses a single ID object (legacy format, still supported). Since it does not specify a `mode`, the program automatically uses the global mode defined in `config.jsonc`.
-
-## 🛠️ Installation & Usage
-
-You will need a Python environment (3.10+) and a browser with userscript support (such as Chrome, Firefox, or Edge).
-
-### 1. Preparation
-
-*   **Install Python dependencies**
-    Open a terminal, navigate to the project root, and run:
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-*   **Install a userscript manager**
-    Install the [Tampermonkey](https://www.tampermonkey.net/) extension for your browser.
-
-*   **Install this project's userscript**
-    1.  Open the Tampermonkey management panel.
-    2.  Click "Add a new script" / "Create a new script".
-    3.  Copy all the code from [`TampermonkeyScript/LMArenaApiBridge.js`](TampermonkeyScript/LMArenaApiBridge.js) and paste it into the editor.
-    4.  Save the script.
-
-### 2. Run the Main Program
-
-1.  **Start the local server**
-    In the project root directory, run the main server:
-    ```bash
-    python api_server.py
-    ```
-    When you see the message that the server has started at `http://127.0.0.1:5102`, the server is ready.
-
-2.  **Keep an LMArena page open**
-    Make sure at least one LMArena page is open and the Tampermonkey script has successfully connected to the local server (the page title will start with `✅`). You don't need to stay on a chat page — any page under the domain works, including the Leaderboard.
-
-### 3. Update the Available Model List (Optional but Recommended)
-This step generates `available_models.json`, showing which models are currently available on LMArena so you can update `models.json`.
-1.  **Make sure the main server is running**.
-2.  Open **a new terminal** and run the model updater:
-    ```bash
-    python model_updater.py
-    ```
-3.  The script automatically asks the browser to fetch the model list and generates `available_models.json` in the project root.
-4.  Open `available_models.json`, find the models you want, and copy their `"publicName"` / `"id"` pairs into `models.json` (in the format `"publicName": "id"`).
-
-### 4. Configure Session IDs (Only when needed — usually a one-time setup, unless you switch models or the original conversation becomes invalid)
-
-This is the **most important** step. You need a valid session ID and message ID so the program can communicate correctly with the LMArena API.
-
-1.  **Make sure the main server is running**
-    `api_server.py` must be running, because the ID updater activates the browser's capture functionality through it.
-
-2.  **Run the ID updater**
-    Open **a new terminal** and run the `id_updater.py` script in the project root:
-    ```bash
-    python id_updater.py
-    ```
-    *   The script will prompt you to select a mode (DirectChat / Battle).
-    *   After you choose, it notifies the running main server.
-
-3.  **Activate and capture**
-    *   You should now see a crosshair icon (🎯) at the very front of the title bar of the LMArena page in your browser, indicating that **ID capture mode is active**.
-    *   Open an LMArena arena page **where a message has been sent to the target model**. Note: on a Battle page, do not look at the model names — keep them anonymous, and make sure the last message in the current conversation view is an answer from the target model; for Direct Chat, likewise make sure the last message is an answer from the target model.
-    *   **Click the Retry button in the top-right corner of the target model's answer card**.
-    *   The Tampermonkey script will capture the `sessionId` and `messageId` and send them to `id_updater.py`.
-
-4.  **Verify the result**
-    *   Back in the terminal running `id_updater.py`, you will see the successfully captured IDs printed, along with a notice that they have been written to `config.jsonc`.
-    *   The script closes automatically on success. Your configuration is now complete!
-
-### 5. Configure Your OpenAI Client
-Point your client or application's OpenAI API address at the local server:
-*   **API Base URL**: `http://127.0.0.1:5102/v1`
-*   **API Key**: If `api_key` in `config.jsonc` is empty, any value works; if it is set, you must provide the correct key.
-*   **Model Name**: Specify the model name you want in your client (**it must exactly match a name in `models.json`**). The server looks up the corresponding model ID from this name.
-
-### 6. Start Chatting! 💬
-You can now use your client as usual — all requests are proxied through the local server to LMArena!
+*   **Opus**: an ID pool — one entry chosen randomly per request, strictly following its bound `mode` and `battle_target`.
+*   **Gemini**: a single ID object (legacy format, still supported); with no `mode` specified, the global mode from `config.jsonc` applies.
 
 ## 🤔 How Does It Work?
 
@@ -182,16 +248,22 @@ sequenceDiagram
     participant S as Local FastAPI Server 🐍
     participant MU as Model Updater (model_updater.py) 📋
     participant IU as ID Updater (id_updater.py) 🆔
-    participant T as Tampermonkey Script 🐵 (on LMArena page)
-    participant L as LMArena.ai 🌐
+    participant T as Tampermonkey Script 🐵 (on Arena page)
+    participant L as Arena.ai 🌐
 
     alt Initialization
         T->>+S: (page load) establish WebSocket connection
         S-->>-T: connection acknowledged
     end
 
-    alt Manual model list update (optional)
-        MU->>+S: (user runs) POST /internal/request_model_update
+    alt Model list update (default: direct API, no browser)
+        MU->>+L: (user runs) GET /nextjs-api/model-catalog
+        L-->>-MU: JSON catalog (all arenas)
+        MU->>MU: flatten + write available_models.json
+    end
+
+    alt Model list update (legacy fallback via browser)
+        MU->>+S: POST /internal/request_model_update
         S->>T: (WebSocket) send 'send_page_source' command
         T->>T: capture the page HTML
         T->>S: (HTTP) POST /internal/update_available_models (with HTML)
@@ -202,57 +274,48 @@ sequenceDiagram
     alt Manual session ID update
         IU->>+S: (user runs) POST /internal/start_id_capture
         S->>T: (WebSocket) send 'activate_id_capture' command
+        S-->>-IU: activation confirmed
         T->>L: (user clicks Retry) fetch request intercepted
-        T->>IU: (HTTP) send the captured IDs
+        T->>+IU: (HTTP) send the captured IDs
         IU->>IU: update config.jsonc
         IU-->>-T: acknowledged
     end
 
     alt Normal chat flow
         C->>+S: (user chats) /v1/chat/completions request
-        S->>S: convert request to LMArena format (model ID from models.json)
+        S->>S: convert request to Arena format (model ID from models.json)
         S->>T: (WebSocket) send message with request_id and payload
-        T->>L: (fetch) send the real request to the LMArena API
+        T->>L: (fetch) send the real request to the Arena API
         L-->>T: (streaming) return the model response
         T->>S: (WebSocket) forward response chunks one by one
         S-->>-C: (streaming) return the response in OpenAI format
     end
 
-    alt Normal chat flow (including text-to-image)
-        C->>+S: (user chats) /v1/chat/completions request
-        S->>S: check the model name
-        alt If it is an image model (e.g. DALL-E)
-            S->>S: convert request to LMArena format
-            S->>T: (WebSocket) send message with request_id and payload
-            T->>L: (fetch) send the real request
-            L-->>T: (streaming) return image URLs
-            T->>S: (WebSocket) forward the URLs
-            S->>S: format the URLs as Markdown text
-            S-->>-C: return a chat response containing Markdown images
-        else If it is a regular text model
-            S->>S: convert request to LMArena format
-            S->>T: (WebSocket) send message with request_id and payload
-            T->>L: (fetch) send the real request to the LMArena API
-            L-->>T: (streaming) return the model response
-            T->>S: (WebSocket) forward response chunks one by one
-            S-->>-C: (streaming) return the response in OpenAI format
-        end
+    alt Chat flow with an image model
+        C->>+S: (user chats) request with an image model
+        S->>S: model type is 'image' - same pipeline as text
+        S->>T: (WebSocket) send message with request_id and payload
+        T->>L: (fetch) send the real request
+        L-->>T: (streaming) return image URLs
+        T->>S: (WebSocket) forward the URL frames
+        S->>S: format the URLs as Markdown images
+        S-->>-C: chat response containing Markdown images
     end
 ```
 
-1.  **Establishing the connection**: When you open an LMArena page in your browser, the **Tampermonkey script** immediately establishes a persistent **WebSocket connection** to the **local FastAPI server**.
+1.  **Establishing the connection**: When you open an Arena page in your browser, the **Tampermonkey script** immediately establishes a persistent **WebSocket connection** to the **local FastAPI server**.
     > **Note**: The current architecture assumes only one browser tab is active. If multiple pages are open, only the last connection takes effect.
-2.  **Receiving requests**: The **OpenAI client** sends a standard chat request to the local server, specifying the `model` name in the request body.
-3.  **Task dispatch**: Upon receiving the request, the server looks up the corresponding model ID from `models.json` based on the `model` name, converts the request into the format required by LMArena, attaches a unique request ID (`request_id`), and sends the task to the connected Tampermonkey script over the WebSocket.
-4.  **Execution and response**: After receiving the task, the Tampermonkey script issues a `fetch` request directly to LMArena's API endpoint. As LMArena streams the response back, the script captures the data chunks and forwards them one by one to the local server over the WebSocket.
-5.  **Response relay**: Based on the `request_id` attached to each chunk, the server routes it into the correct response queue and streams the data back to the OpenAI client in real time.
+2.  **Receiving requests**: The **OpenAI client** sends a standard chat request to the local server, specifying the `model` name in the body.
+3.  **Task dispatch**: The server looks up the model ID in `models.json`, converts the request into the format Arena expects, attaches a unique `request_id`, and sends the task to the Tampermonkey script over the WebSocket.
+4.  **Execution and response**: The script issues a `fetch` directly to Arena's API endpoint (using your browser's logged-in session). As Arena streams the response back, the script forwards the chunks to the server over the WebSocket.
+5.  **Response relay**: Using each chunk's `request_id`, the server routes it into the correct response queue and streams it back to the OpenAI client in real time.
 
 ## 📖 API Endpoints
 
 ### List Models
 
 *   **Endpoint**: `GET /v1/models`
-*   **Description**: Returns an OpenAI-compatible model list, read from the `models.json` file.
+*   **Description**: Returns an OpenAI-compatible model list, read from `models.json` (hot-reloaded).
 
 ### Chat Completions
 
@@ -262,7 +325,7 @@ sequenceDiagram
 ### Image Generation (Integrated)
 
 *   **Endpoint**: `POST /v1/chat/completions`
-*   **Description**: Text-to-image is now fully integrated into the main chat endpoint. To generate images, simply specify an image model in the request body (e.g. `"model": "dall-e-3"`) and send the request like a normal chat message. The server recognizes and handles it automatically.
+*   **Description**: Text-to-image is fully integrated into the chat endpoint. Specify an image model in the request body (e.g. `"model": "dall-e-3"`) and send the request like a normal chat message; the server handles it automatically and returns images as Markdown.
 *   **Request example**:
     ```bash
     curl http://127.0.0.1:5102/v1/chat/completions \
@@ -278,10 +341,10 @@ sequenceDiagram
         "n": 1
       }'
     ```
-*   **Response example (identical to a normal chat)**:
+*   **Response example (identical shape to a normal chat)**:
     ```json
     {
-      "id": "img-as-chat-...",
+      "id": "chatcmpl-...",
       "object": "chat.completion",
       "created": 1677663338,
       "model": "dall-e-3",
@@ -312,11 +375,15 @@ sequenceDiagram
 ├── model_endpoint_map.json     # [Advanced] Model-to-dedicated-session mapping 🎯
 ├── requirements.txt            # Python dependency list 📦
 ├── README.md                   # The file you are reading right now 👋
+├── PROJECT_SUMMARY.md          # What the project does, its limits & site compatibility 📊
+├── SESSION_HANDOFF.md          # Session state, done work & leftover tasks 🤝
 ├── config.jsonc                # Global feature configuration file ⚙️
 ├── modules/
 │   └── update_script.py        # Auto-update logic script 🔄
+├── tests/
+│   └── integration_smoke.py    # End-to-end smoke test with a simulated browser 🧪
 └── TampermonkeyScript/
     └── LMArenaApiBridge.js     # Frontend automation Tampermonkey script 🐵
 ```
 
-**Enjoy exploring the world of models on LMArena freely!** 💖
+**Enjoy exploring the world of models on Arena freely!** 💖
